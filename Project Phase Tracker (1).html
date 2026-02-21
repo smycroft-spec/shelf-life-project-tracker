@@ -1,0 +1,397 @@
+<!--
+  PROJECT PHASE TRACKER FOR SHAREPOINT
+  =====================================
+  
+  SETUP INSTRUCTIONS:
+  1. Update the CONFIG section below with your SharePoint details
+  2. Upload this file to GitHub Pages (or any web host)
+  3. Embed the URL in SharePoint using the Embed web part
+  
+  REQUIREMENTS:
+  - A SharePoint list with action items
+  - A column for "Phase" or "Stage" (choice or text field)
+  - A column for "Status" (with "In Progress" as one option)
+  
+  The tracker will automatically show the phase that has "In Progress" items as current.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Phase Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e8e0f0 0%, #c9b8e8 50%, #b8a8e0 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .tracker-container {
+            background: white;
+            border-radius: 20px;
+            padding: 50px 60px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .tracker-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .tracker-header h1 {
+            color: #333;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .tracker-header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #888;
+            padding: 20px;
+        }
+
+        .error {
+            text-align: center;
+            color: #e74c3c;
+            padding: 20px;
+            background: #fdf0f0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .progress-tracker {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            padding: 30px 0;
+        }
+
+        .phase {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+
+        .phase-indicator {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .current-arrow {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #555;
+            font-size: 18px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .phase.current .current-arrow {
+            opacity: 1;
+        }
+
+        .phase-circle {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            transition: all 0.4s ease;
+            position: relative;
+        }
+
+        .phase.upcoming .phase-circle {
+            background: white;
+            border: 2px solid #ddd;
+            color: #bbb;
+        }
+
+        .phase.current .phase-circle {
+            background: #4ade80;
+            border: 2px solid #4ade80;
+            color: white;
+            box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4);
+        }
+
+        .phase.completed .phase-circle {
+            background: #4ade80;
+            border: 2px solid #4ade80;
+            color: white;
+        }
+
+        .checkmark {
+            display: none;
+        }
+
+        .phase.completed .checkmark {
+            display: block;
+        }
+
+        .phase.completed .phase-number {
+            display: none;
+        }
+
+        .phase-name {
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            text-align: center;
+        }
+
+        .phase.upcoming .phase-name {
+            color: #bbb;
+        }
+
+        .phase.current .phase-name,
+        .phase.completed .phase-name {
+            color: #333;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 55px;
+            left: 10%;
+            right: 10%;
+            height: 3px;
+            background: #e0e0e0;
+            z-index: 1;
+        }
+
+        .progress-line-fill {
+            height: 100%;
+            background: #4ade80;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        .status-info {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 13px;
+        }
+
+        @media (max-width: 700px) {
+            .tracker-container {
+                padding: 30px 20px;
+            }
+            
+            .phase-circle {
+                width: 40px;
+                height: 40px;
+                font-size: 14px;
+            }
+            
+            .phase-name {
+                font-size: 11px;
+            }
+            
+            .progress-line {
+                top: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tracker-container">
+        <div class="tracker-header">
+            <h1>Project Progress</h1>
+            <p>Current status based on action items</p>
+        </div>
+        
+        <div id="errorContainer"></div>
+        <div id="loadingContainer" class="loading">Loading project status...</div>
+        
+        <div class="progress-tracker" id="progressTracker" style="display: none;">
+            <div class="progress-line">
+                <div class="progress-line-fill" id="progressFill"></div>
+            </div>
+            <!-- Phases will be generated dynamically -->
+        </div>
+        
+        <div class="status-info" id="statusInfo" style="display: none;">
+            Last updated: <span id="lastUpdated"></span>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================
+        // CONFIGURATION - UPDATE THESE VALUES FOR YOUR SETUP
+        // =====================================================
+        const CONFIG = {
+            // Your SharePoint site URL (e.g., "https://contoso.sharepoint.com/sites/YourSite")
+            siteUrl: "https://platinumperformance.sharepoint.com/sites/NVI",
+            
+            // The name of your Action Items list
+            listName: "Shelf Life Action Items",
+            
+            // Column name that contains the phase/stage (internal name)
+            phaseColumn: "Stage",
+            
+            // Column name that contains the status (internal name)
+            statusColumn: "Status",
+            
+            // The status value that indicates "in progress"
+            inProgressValue: "In Progress",
+            
+            // Your project phases in order
+            phases: [
+                "Discovery",
+                "Ideation",
+                "Commercialization",
+                "Launch",
+                "Post Launch"
+            ]
+        };
+        // =====================================================
+        // END CONFIGURATION
+        // =====================================================
+
+        async function fetchActionItems() {
+            const apiUrl = `${CONFIG.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(CONFIG.listName)}')/items?$select=${CONFIG.phaseColumn},${CONFIG.statusColumn}&$filter=${CONFIG.statusColumn} eq '${CONFIG.inProgressValue}'`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json;odata=verbose',
+                    'Content-Type': 'application/json;odata=verbose'
+                },
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch data: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            return data.d.results;
+        }
+
+        function determineCurrentPhase(actionItems) {
+            // Find all phases that have "In Progress" items
+            const inProgressPhases = new Set();
+            
+            actionItems.forEach(item => {
+                const phase = item[CONFIG.phaseColumn];
+                if (phase) {
+                    inProgressPhases.add(phase);
+                }
+            });
+            
+            // Return the earliest phase that has in-progress items
+            for (let i = 0; i < CONFIG.phases.length; i++) {
+                if (inProgressPhases.has(CONFIG.phases[i])) {
+                    return i;
+                }
+            }
+            
+            // If no in-progress items, assume all complete
+            return CONFIG.phases.length;
+        }
+
+        function renderPhases(currentPhaseIndex) {
+            const tracker = document.getElementById('progressTracker');
+            const progressLine = tracker.querySelector('.progress-line');
+            
+            // Clear existing phases (keep progress line)
+            tracker.innerHTML = '';
+            tracker.appendChild(progressLine);
+            
+            CONFIG.phases.forEach((phaseName, index) => {
+                let status = 'upcoming';
+                if (index < currentPhaseIndex) {
+                    status = 'completed';
+                } else if (index === currentPhaseIndex) {
+                    status = 'current';
+                }
+                
+                const phaseHtml = `
+                    <div class="phase ${status}">
+                        <div class="phase-indicator">
+                            <span class="current-arrow">&#8964;</span>
+                            <div class="phase-circle">
+                                <span class="phase-number">${index + 1}</span>
+                                <span class="checkmark">&#10003;</span>
+                            </div>
+                        </div>
+                        <span class="phase-name">${phaseName}</span>
+                    </div>
+                `;
+                
+                tracker.insertAdjacentHTML('beforeend', phaseHtml);
+            });
+            
+            // Update progress bar
+            const progress = currentPhaseIndex >= CONFIG.phases.length 
+                ? 100 
+                : (currentPhaseIndex / (CONFIG.phases.length - 1)) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        function showError(message) {
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('errorContainer').innerHTML = `<div class="error">${message}</div>`;
+            
+            // Still show phases with default state
+            document.getElementById('progressTracker').style.display = 'flex';
+            renderPhases(0);
+        }
+
+        function showSuccess(currentPhaseIndex) {
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('progressTracker').style.display = 'flex';
+            document.getElementById('statusInfo').style.display = 'block';
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+            
+            renderPhases(currentPhaseIndex);
+        }
+
+        async function init() {
+            try {
+                const actionItems = await fetchActionItems();
+                const currentPhaseIndex = determineCurrentPhase(actionItems);
+                showSuccess(currentPhaseIndex);
+            } catch (error) {
+                console.error('Error fetching action items:', error);
+                showError(`Unable to connect to SharePoint list. Please check CONFIG settings.<br><small>${error.message}</small>`);
+            }
+        }
+
+        // Initialize on page load
+        init();
+        
+        // Refresh every 5 minutes
+        setInterval(init, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
